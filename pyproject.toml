@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "warrantgate"
+version = "0.1.0"
+description = "Policy, human approval and a tamper-evident audit log between an AI agent and its MCP tools"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+warrantgate = "warrantgate.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

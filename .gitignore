@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.mutants/
+*.log
+*.anchor
+.DS_Store

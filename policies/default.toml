@@ -1,0 +1,81 @@
+# Warrantgate default policy. Tool classes, per-agent scopes, and the patterns the rules use.
+
+[tools]
+"fs.read_file" = "read"
+"fs.list_dir" = "read"
+"notes.read" = "read"
+"db.query" = "read"
+"fs.write_file" = "write"
+"fs.delete" = "write"
+"calendar.create" = "write"
+"shell.run" = "exec"
+"web.fetch" = "egress"
+"web.post" = "egress"
+"email.send" = "egress"
+"git.push" = "egress"
+"admin.grant_role" = "admin"
+"admin.create_token" = "admin"
+
+[risk]
+base = { read = 0.05, write = 0.30, exec = 0.50, egress = 0.40, admin = 0.80 }
+injected_bonus = 0.30        # untrusted content in this session contained instruction-like text
+provenance_bonus = 0.30      # an argument was copied from untrusted tool output, not from the user's task
+secret_bonus = 0.30          # this session has read confidential data
+hold_at = 0.60               # at or above: a human must approve; below: allow
+
+[sensitive]
+# reading or writing a path matching any of these is denied unless the agent lists the prefix in secret_paths
+path_patterns = [
+  '(^|/)\.ssh(/|$)', '(^|/)\.env($|\.(?!example|sample|template))', 'id_rsa', 'id_ed25519', '/etc/(shadow|passwd|sudoers)',
+  'credentials', '\.pem$', '(^|/)secrets?(/|\.)', '\.aws(/|$)', 'kubeconfig', '\.npmrc$', '\.netrc$',
+]
+confidential_tables = ["users", "customers", "payments", "api_keys"]
+protected_write_patterns = ['^/etc/', 'warrantgate', '(^|/)\.github/workflows/', '(^|/)policy[^/]*\.(toml|json|ya?ml)$']
+
+[exec]
+deny_patterns = [
+  'curl[^|;]*\|\s*(ba|z)?sh', 'wget[^|;]*\|\s*(ba|z)?sh', 'rm\s+-[a-z]*r[a-z]*f?\s+(/|~|\$HOME)', '\bnc\b.*\s-e\b', 'base64\s+(-d|--decode).*\|\s*(ba|z)?sh',
+  '\bsudo\b', '/dev/tcp/', '\bmkfifo\b', 'chmod\s+[0-7]*7[0-7]*\s+/', '\beval\b.*\$\(', ':\(\)\s*\{',
+]
+# a command is auto-allowed only if it starts with one of these AND contains no shell metacharacters
+safe_prefixes = ["git status", "git diff", "git log", "ls", "pwd", "cat ", "echo ", "python -m pytest", "pytest", "npm test", "make test", "go test"]
+
+[injection]
+# instruction-like text inside tool OUTPUT is evidence the content is trying to steer the agent
+patterns = [
+  '(?i)ignore (all |any )?(previous|prior|above) (instructions|prompts?)', '(?i)disregard (the )?(system|previous|above)', '(?i)\bsystem prompt\b',
+  '(?i)you (must|should) (now|immediately)', '(?i)<\s*important\s*>', '(?i)do not (tell|inform|mention to) the user', '(?i)new instructions?:',
+  '(?i)as an? (ai|assistant),? (you )?(must|will)', '(?i)\bBEGIN (HIDDEN|SECRET) INSTRUCTIONS\b',
+]
+
+[bulk]
+distinct_reads_before_egress = 25
+
+[agents.coder]
+classes = ["read", "write", "exec"]
+paths = ["/work/"]
+egress_domains = []
+
+[agents.assistant]
+classes = ["read", "write", "egress"]
+paths = ["/work/", "/notes/"]
+egress_domains = ["docs.python.org", "developer.mozilla.org", "en.wikipedia.org", "github.com", "gist.github.com"]
+email_domains = ["corp.example"]
+
+[agents.analyst]
+classes = ["read", "write"]
+paths = ["/work/", "/data/"]
+tables = ["orders", "products", "events", "users"]
+egress_domains = []
+
+[agents.deployer]
+classes = ["read", "egress"]
+paths = ["/work/", "/secrets/deploy/"]
+secret_paths = ["/secrets/deploy/"]
+egress_domains = ["api.deploy.internal"]
+secret_ok_domains = ["api.deploy.internal"]
+
+[agents.admin_bot]
+classes = ["read", "admin"]
+paths = ["/work/"]
+admin_requires_approval = true
